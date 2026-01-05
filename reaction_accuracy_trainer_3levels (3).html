@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>反应与点击精准训练（3关，总分100）</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0b0f14;overflow:hidden;touch-action:none;}
+    canvas{width:100vw;height:100vh;display:block;}
+    .hud{
+      position:fixed;left:12px;right:12px;top:12px;
+      display:flex;justify-content:space-between;gap:12px;
+      font-family: ui-sans-serif,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+      color:#e7eef7; user-select:none; pointer-events:none;
+      text-shadow:0 2px 10px rgba(0,0,0,.35);
+    }
+    .box{
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:14px;padding:10px 12px;backdrop-filter:blur(8px);
+      min-width: 150px;
+    }
+    .big{font-size:18px;font-weight:900;}
+    .small{font-size:12px;opacity:.9;line-height:1.45;}
+    .center{
+      position:fixed;left:50%;transform:translateX(-50%);top:10px;
+      font-family: ui-sans-serif,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+      color:#cfe0f3;font-size:12px;opacity:.9;
+      text-shadow:0 2px 10px rgba(0,0,0,.35);
+      pointer-events:none; user-select:none;
+    }
+    .overlay{
+      position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,0.48);color:#e7eef7;
+      font-family: ui-sans-serif,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+      padding:22px;text-align:center;
+    }
+    .panel{
+      width:min(92vw,640px);
+      background:rgba(255,255,255,0.07);
+      border:1px solid rgba(255,255,255,0.14);
+      border-radius:18px;padding:18px;backdrop-filter:blur(10px);
+    }
+    .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+    .btn{
+      display:inline-block;padding:10px 14px;border-radius:14px;
+      border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.08);
+      color:#e7eef7;font-weight:900;pointer-events:auto; user-select:none;
+      cursor:pointer;
+    }
+    .btn.primary{background:rgba(120,210,255,0.14);border-color:rgba(120,210,255,0.28)}
+    .btn.warn{background:rgba(255,160,160,0.14);border-color:rgba(255,160,160,0.28)}
+    .subgrid{
+      display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;
+      text-align:left;
+    }
+    .pill{
+      display:inline-block;padding:2px 8px;border-radius:999px;
+      background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);
+      font-size:12px;opacity:.92;
+    }
+    .tips{
+      position:fixed;left:12px;right:12px;bottom:12px;
+      font-family: ui-sans-serif,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+      color:#cfe0f3;font-size:12px;opacity:.85;pointer-events:none;
+      text-shadow:0 2px 10px rgba(0,0,0,.35);
+    }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud">
+  <div class="box">
+    <div class="big">关卡：<span id="lvl">-</span></div>
+    <div class="small">计时：<span id="timer">-</span> ｜ 目标：<span id="goal">-</span></div>
+  </div>
+  <div class="box" style="text-align:right">
+    <div class="big">本关：<span id="lvlScore">0</span></div>
+    <div class="small">总分：<span id="totalScore">0</span>/100</div>
+  </div>
+</div>
+
+<div class="center" id="centerHint">点击屏幕开始</div>
+
+<div class="tips">
+  操作：点按屏幕击中靶点（红=击中，蓝=不要点）。适合“反应速度 + 点击精准”训练。
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="panel" id="panel">
+    <div style="font-size:20px;font-weight:950;margin-bottom:6px;" id="title">反应与点击精准训练</div>
+    <div class="small" style="line-height:1.6;opacity:.95" id="desc">
+      三关挑战：<br/>
+      ① 反应测试：随机出现靶点，点击越快分越高（多次取平均）。<br/>
+      ② 准确&节奏：10秒内不断出现靶点，考验击中数量与命中率。<br/>
+      ③ 识别&抑制：红靶要点、蓝靶不要点，既要快又要稳。<br/>
+      <span class="pill">总分=三关平均（满分100）</span>
+    </div>
+
+    <div class="subgrid" id="stats" style="display:none;">
+      <div class="box" style="min-width:unset">
+        <div class="small" style="opacity:.95"><b>第一关</b>：平均反应 <span id="s1rt">-</span> ms ｜ 分数 <span id="s1">-</span></div>
+        <div class="small" style="opacity:.95"><b>第二关</b>：击中 <span id="s2hit">-</span> / 点击 <span id="s2shot">-</span> ｜ 分数 <span id="s2">-</span></div>
+        <div class="small" style="opacity:.95"><b>第三关</b>：正确 <span id="s3ok">-</span> ｜ 误点 <span id="s3bad">-</span> ｜ 分数 <span id="s3">-</span></div>
+      </div>
+      <div class="box" style="min-width:unset;text-align:center">
+        <div class="big" style="font-size:28px">总分：<span id="sTot">0</span>/100</div>
+        <div class="small" style="opacity:.9">建议：多打几轮，观察你在“快”和“稳”之间的权衡。</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="btn primary" id="startBtn">开始第一关</div>
+      <div class="btn" id="practiceBtn">快速练习（无计分）</div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="btn" id="restartBtn">重置整套成绩</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  const DPR = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
+  function resize(){
+    canvas.width = Math.floor(innerWidth * DPR);
+    canvas.height = Math.floor(innerHeight * DPR);
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // HUD elements
+  const elLvl = document.getElementById('lvl');
+  const elTimer = document.getElementById('timer');
+  const elGoal = document.getElementById('goal');
+  const elLvlScore = document.getElementById('lvlScore');
+  const elTotalScore = document.getElementById('totalScore');
+  const centerHint = document.getElementById('centerHint');
+
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+  const practiceBtn = document.getElementById('practiceBtn');
+  const restartBtn = document.getElementById('restartBtn');
+
+  const title = document.getElementById('title');
+  const desc = document.getElementById('desc');
+  const statsBox = document.getElementById('stats');
+  const s1rt = document.getElementById('s1rt');
+  const s1 = document.getElementById('s1');
+  const s2hit = document.getElementById('s2hit');
+  const s2shot = document.getElementById('s2shot');
+  const s2 = document.getElementById('s2');
+  const s3ok = document.getElementById('s3ok');
+  const s3bad = document.getElementById('s3bad');
+  const s3 = document.getElementById('s3');
+  const sTot = document.getElementById('sTot');
+
+  // ====== Helpers ======
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const rand = (a,b)=>Math.random()*(b-a)+a;
+  const dist = (x1,y1,x2,y2)=>Math.hypot(x1-x2,y1-y2);
+
+  // ====== Target ======
+  // Types: 'hit' (red), 'avoid' (blue), 'practice'
+  let target = null; // {x,y,r, type, born, life, innerR}
+  function spawnTarget(type, opts={}){
+    const pad = 42;
+    const r = opts.r ?? rand(26, 40);
+    const x = (opts.x ?? clamp(rand(pad, innerWidth-pad), pad+r, innerWidth-pad-r));
+    const y = (opts.y ?? clamp(rand(110, innerHeight-80), 110+r, innerHeight-80-r));
+    const innerR = (opts.innerR ?? 0.42) * r;
+    target = {
+      x,y,r, type,
+      innerR,
+      born: performance.now(),
+      life: opts.life ?? 900
+    };
+  }
+  function clearTarget(){ target = null; }
+
+  function hitTest(px,py){
+    if(!target) return {hit:false, inner:false};
+    const d = dist(px,py,target.x,target.y);
+    return { hit: d <= target.r, inner: d <= target.innerR };
+  }
+
+  // ====== Game state ======
+  // Modes: 'menu', 'practice', 'lvl1', 'lvl2', 'lvl3', 'result'
+  let mode = 'menu';
+  let lvl = 0;
+
+  // scoring storage
+  let lvlScores = [0,0,0];
+  let totalScore = 0;
+
+  // timers
+  let tLeft = 0;
+
+  // Level1
+  const L1_TRIALS = 10;
+  let l1Trial = 0;
+  let l1Wait = 0;      // seconds until target appears
+  let l1State = 'wait';// 'wait' or 'active'
+  let l1AppearT = 0;   // ms
+  let l1RTs = [];      // ms
+  let l1FalseStart = 0;
+
+  // Level2
+  const L2_TIME = 10.0;
+  let l2SpawnIn = 0;
+  let l2Hits = 0;
+  let l2Shots = 0;
+  let l2Missed = 0;
+
+  // Level3
+  const L3_TIME = 12.0;
+  let l3SpawnIn = 0;
+  let l3OK = 0;
+  let l3Bad = 0;   // misclick on avoid OR click without target
+  let l3Miss = 0;  // miss hostile (expired)
+  let l3Head = 0;  // inner hits
+
+  // practice
+  let prSpawnIn = 0;
+  let prHits = 0;
+
+  // ====== Scoring functions ======
+  function scoreFromAvgRT(avgMs){
+    // 200ms ~ 100, 500ms ~ 55, 800ms ~ 10
+    const s = 100 - (avgMs - 200) * 0.15;
+    return Math.round(clamp(s, 0, 100));
+  }
+
+  function scoreLevel2(hits, shots){
+    // goal ~ 18 hits in 10s if fast; accuracy matters
+    const goal = 18;
+    const totalKill = clamp(hits / goal, 0, 1);
+    const killScore = totalKill * 70;
+    const acc = shots > 0 ? clamp(hits / shots, 0, 1) : 0;
+    const accScore = acc * 30;
+    return Math.round(clamp(killScore + accScore, 0, 100));
+  }
+
+  function scoreLevel3(ok, bad, miss, head){
+    // Points then normalize.
+    // headshot gives extra, bad is heavily penalized.
+    const pts = ok*4 + head*2 - bad*5 - miss*2;
+    // Typical range: [-40..90]
+    const s = (pts + 25) / 95 * 100;
+    return Math.round(clamp(s, 0, 100));
+  }
+
+  function recomputeTotal(){
+    totalScore = Math.round((lvlScores[0] + lvlScores[1] + lvlScores[2]) / 3);
+    elTotalScore.textContent = totalScore.toString();
+  }
+
+  // ====== UI update ======
+  function setHUD(){
+    elLvl.textContent = lvl ? String(lvl) : '-';
+
+    if(mode === 'lvl1'){
+      elTimer.textContent = `${l1Trial}/${L1_TRIALS}`;
+      elGoal.textContent = '点击出现的红靶（别提前点）';
+    } else if(mode === 'lvl2'){
+      elTimer.textContent = `${tLeft.toFixed(1)}s`;
+      elGoal.textContent = '10秒内尽可能多击中红靶';
+    } else if(mode === 'lvl3'){
+      elTimer.textContent = `${tLeft.toFixed(1)}s`;
+      elGoal.textContent = '红要点 / 蓝别点（误点扣分）';
+    } else if(mode === 'practice'){
+      elTimer.textContent = '∞';
+      elGoal.textContent = `练习：击中次数 ${prHits}`;
+    } else {
+      elTimer.textContent = '-';
+      elGoal.textContent = '-';
+    }
+
+    // current level score display
+    if(lvl >= 1 && lvl <= 3) elLvlScore.textContent = String(lvlScores[lvl-1] || 0);
+    else elLvlScore.textContent = '0';
+
+    recomputeTotal();
+
+    // center hint
+    if(mode === 'lvl1' && l1State === 'wait'){
+      centerHint.textContent = '等待…别点（提前点会罚）';
+      centerHint.style.opacity = 0.95;
+    } else if(mode === 'lvl1' && l1State === 'active'){
+      centerHint.textContent = '现在点！';
+      centerHint.style.opacity = 0.95;
+    } else if(mode === 'lvl2'){
+      centerHint.textContent = '尽量快+准';
+      centerHint.style.opacity = 0.75;
+    } else if(mode === 'lvl3'){
+      centerHint.textContent = '红点蓝不点';
+      centerHint.style.opacity = 0.75;
+    } else if(mode === 'practice'){
+      centerHint.textContent = '练习中（点红靶）';
+      centerHint.style.opacity = 0.7;
+    } else {
+      centerHint.textContent = '点击屏幕开始';
+      centerHint.style.opacity = 0.0;
+    }
+  }
+
+  // ====== Mode transitions ======
+  function showMenu(){
+    mode = 'menu'; lvl = 0;
+    clearTarget();
+    overlay.style.display = 'flex';
+    statsBox.style.display = 'none';
+    title.textContent = '反应与点击精准训练';
+    desc.innerHTML = `
+      三关挑战：<br/>
+      ① <b>反应测试</b>：随机出现红靶，点击越快分越高（多次取平均）。<br/>
+      ② <b>准确&节奏</b>：10秒内不断出现红靶，考验击中数量与命中率。<br/>
+      ③ <b>识别&抑制</b>：红靶要点、蓝靶不要点，既要快又要稳。<br/>
+      <span class="pill">总分=三关平均（满分100）</span>
+    `;
+    startBtn.textContent = '开始第一关';
+    startBtn.classList.add('primary');
+    setHUD();
+  }
+
+  function startPractice(){
+    mode = 'practice'; lvl = 0;
+    overlay.style.display = 'none';
+    prHits = 0;
+    prSpawnIn = rand(0.3, 0.8);
+    clearTarget();
+    setHUD();
+  }
+
+  function startLevel1(){
+    mode = 'lvl1'; lvl = 1;
+    overlay.style.display = 'none';
+    clearTarget();
+    l1Trial = 0;
+    l1RTs = [];
+    l1FalseStart = 0;
+    l1State = 'wait';
+    l1Wait = rand(0.6, 1.8);
+    setHUD();
+  }
+
+  function finishLevel1(){
+    const avg = l1RTs.length ? (l1RTs.reduce((a,b)=>a+b,0)/l1RTs.length) : 999;
+    const score = scoreFromAvgRT(avg);
+    lvlScores[0] = score;
+    elLvlScore.textContent = String(score);
+
+    // go next
+    startLevel2();
+  }
+
+  function startLevel2(){
+    mode = 'lvl2'; lvl = 2;
+    overlay.style.display = 'none';
+    clearTarget();
+    tLeft = L2_TIME;
+    l2Hits = 0; l2Shots = 0; l2Missed = 0;
+    l2SpawnIn = rand(0.2, 0.55);
+    setHUD();
+  }
+
+  function finishLevel2(){
+    const score = scoreLevel2(l2Hits, l2Shots);
+    lvlScores[1] = score;
+    elLvlScore.textContent = String(score);
+
+    startLevel3();
+  }
+
+  function startLevel3(){
+    mode = 'lvl3'; lvl = 3;
+    overlay.style.display = 'none';
+    clearTarget();
+    tLeft = L3_TIME;
+    l3SpawnIn = rand(0.25, 0.65);
+    l3OK = 0; l3Bad = 0; l3Miss = 0; l3Head = 0;
+    setHUD();
+  }
+
+  function finishLevel3(){
+    const score = scoreLevel3(l3OK, l3Bad, l3Miss, l3Head);
+    lvlScores[2] = score;
+    elLvlScore.textContent = String(score);
+
+    showResult();
+  }
+
+  function showResult(){
+    mode = 'result'; lvl = 0;
+    clearTarget();
+    overlay.style.display = 'flex';
+    statsBox.style.display = 'grid';
+
+    const avgRT = l1RTs.length ? (l1RTs.reduce((a,b)=>a+b,0)/l1RTs.length) : 0;
+
+    s1rt.textContent = avgRT ? avgRT.toFixed(0) : '-';
+    s1.textContent = String(lvlScores[0] || 0);
+    s2hit.textContent = String(l2Hits);
+    s2shot.textContent = String(l2Shots);
+    s2.textContent = String(lvlScores[1] || 0);
+    s3ok.textContent = String(l3OK);
+    s3bad.textContent = String(l3Bad);
+    s3.textContent = String(lvlScores[2] || 0);
+
+    recomputeTotal();
+    sTot.textContent = String(totalScore);
+
+    title.textContent = '本轮成绩';
+    desc.innerHTML = `
+      <span class="pill">总分=三关平均（满分100）</span><br/>
+      想更高分：第一关别抢点；第二关提升“点中率”；第三关减少误点（蓝靶别点）。
+    `;
+
+    startBtn.textContent = '再来一轮（从第一关）';
+    startBtn.classList.add('primary');
+    setHUD();
+  }
+
+  function resetAll(){
+    lvlScores = [0,0,0];
+    totalScore = 0;
+    setHUD();
+  }
+
+  // ====== Input ======
+  function getPos(e){
+    const rect = canvas.getBoundingClientRect();
+    return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
+  }
+
+  canvas.addEventListener('pointerdown', (e)=>{
+    const p = getPos(e);
+
+    if(mode === 'menu' || mode === 'result'){
+      // ignore; buttons handle
+      return;
+    }
+
+    if(mode === 'practice'){
+      if(target){
+        const h = hitTest(p.x,p.y);
+        if(h.hit && target.type === 'hit'){
+          prHits++;
+          clearTarget();
+          prSpawnIn = rand(0.2, 0.6);
+        }
+      }
+      setHUD();
+      return;
+    }
+
+    if(mode === 'lvl1'){
+      if(l1State === 'wait'){
+        // false start penalty
+        l1FalseStart++;
+        // add a "virtual" slow RT
+        l1RTs.push(650);
+      } else if(l1State === 'active' && target){
+        const h = hitTest(p.x,p.y);
+        if(h.hit){
+          const rt = performance.now() - l1AppearT;
+          l1RTs.push(clamp(rt, 80, 1500));
+          clearTarget();
+          l1State = 'wait';
+          l1Trial++;
+          l1Wait = rand(0.7, 2.1);
+          if(l1Trial >= L1_TRIALS){
+            finishLevel1();
+          }
+        }
+      }
+      setHUD();
+      return;
+    }
+
+    if(mode === 'lvl2'){
+      l2Shots++;
+      if(target){
+        const h = hitTest(p.x,p.y);
+        if(h.hit && target.type === 'hit'){
+          l2Hits++;
+          clearTarget();
+          l2SpawnIn = rand(0.18, 0.5);
+        }
+      }
+      setHUD();
+      return;
+    }
+
+    if(mode === 'lvl3'){
+      if(target){
+        const h = hitTest(p.x,p.y);
+        if(h.hit){
+          if(target.type === 'hit'){
+            l3OK++;
+            if(h.inner) l3Head++;
+          } else if(target.type === 'avoid'){
+            l3Bad++;
+          }
+          clearTarget();
+          l3SpawnIn = rand(0.2, 0.6);
+        } else {
+          // clicked but missed target => small penalty to discourage spam
+          l3Bad++;
+        }
+      } else {
+        // clicked with no target
+        l3Bad++;
+      }
+      setHUD();
+      return;
+    }
+  }, {passive:true});
+
+  // ====== Buttons ======
+  startBtn.addEventListener('click', ()=>{
+    // Start from level1 always
+    startLevel1();
+  });
+  practiceBtn.addEventListener('click', ()=>{
+    startPractice();
+  });
+  restartBtn.addEventListener('click', ()=>{
+    lvlScores = [0,0,0];
+    totalScore = 0;
+    showMenu();
+  });
+
+  // Prevent scroll
+  document.body.addEventListener('touchmove', (e)=>e.preventDefault(), {passive:false});
+
+  // ====== Render ======
+  function draw(){
+    const W = canvas.width / DPR;
+    const H = canvas.height / DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.clearRect(0,0,W,H);
+
+    // background
+    const bg = ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'rgba(14,20,30,1)');
+    bg.addColorStop(1,'rgba(7,10,14,1)');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0,0,W,H);
+
+    // subtle grid
+    ctx.globalAlpha = 0.10;
+    ctx.strokeStyle = 'rgba(255,255,255,1)';
+    ctx.lineWidth = 1;
+    const step = 42;
+    for(let x=0;x<W;x+=step){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+    for(let y=0;y<H;y+=step){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // target
+    if(target){
+      const t = target;
+      const isHit = t.type === 'hit';
+      const col = isHit ? 'rgba(255,120,120,0.96)' : (t.type === 'avoid' ? 'rgba(120,170,255,0.96)' : 'rgba(255,210,120,0.96)');
+
+      // shadow
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = 'rgba(0,0,0,1)';
+      ctx.beginPath();
+      ctx.ellipse(t.x, t.y + t.r*0.75, t.r*0.95, t.r*0.38, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // body
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.r, 0, Math.PI*2);
+      ctx.fill();
+
+      // inner ring
+      ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.innerR, 0, Math.PI*2);
+      ctx.stroke();
+
+      // crosshair
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(t.x - t.r*0.9, t.y);
+      ctx.lineTo(t.x + t.r*0.9, t.y);
+      ctx.moveTo(t.x, t.y - t.r*0.9);
+      ctx.lineTo(t.x, t.y + t.r*0.9);
+      ctx.stroke();
+
+      // lifetime indicator arc (for levels 2/3)
+      if(mode === 'lvl2' || mode === 'lvl3'){
+        const age = performance.now() - t.born;
+        const frac = clamp(1 - age / t.life, 0, 1);
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.r + 10, -Math.PI/2, -Math.PI/2 + frac*2*Math.PI);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ====== Update loop ======
+  let last = performance.now();
+  function step(){
+    const now = performance.now();
+    const dt = Math.min(0.033, (now - last)/1000);
+    last = now;
+
+    if(mode === 'practice'){
+      if(!target){
+        prSpawnIn -= dt;
+        if(prSpawnIn <= 0){
+          spawnTarget('hit', {life: 999999, r: rand(28, 44)});
+        }
+      }
+    }
+
+    if(mode === 'lvl1'){
+      if(l1State === 'wait'){
+        l1Wait -= dt;
+        if(l1Wait <= 0){
+          // show target
+          spawnTarget('hit', {life: 999999, r: rand(30, 46), innerR: 0.42, x: innerWidth/2, y: innerHeight/2});
+          l1AppearT = performance.now();
+          l1State = 'active';
+        }
+      } else if(l1State === 'active'){
+        // nothing; waits for click
+      }
+      // live score estimation
+      const avg = l1RTs.length ? (l1RTs.reduce((a,b)=>a+b,0)/l1RTs.length) : 999;
+      lvlScores[0] = scoreFromAvgRT(avg);
+      elLvlScore.textContent = String(lvlScores[0]);
+    }
+
+    if(mode === 'lvl2'){
+      tLeft -= dt;
+      if(tLeft <= 0){
+        tLeft = 0;
+        finishLevel2();
+      } else {
+        if(!target){
+          l2SpawnIn -= dt;
+          if(l2SpawnIn <= 0){
+            spawnTarget('hit', {life: rand(520, 850), r: rand(22, 38), innerR: 0.45});
+          }
+        } else {
+          // expire
+          if(performance.now() - target.born > target.life){
+            l2Missed++;
+            clearTarget();
+            l2SpawnIn = rand(0.12, 0.35);
+          }
+        }
+      }
+      // live scoring
+      lvlScores[1] = scoreLevel2(l2Hits, l2Shots);
+      elLvlScore.textContent = String(lvlScores[1]);
+    }
+
+    if(mode === 'lvl3'){
+      tLeft -= dt;
+      if(tLeft <= 0){
+        tLeft = 0;
+        finishLevel3();
+      } else {
+        if(!target){
+          l3SpawnIn -= dt;
+          if(l3SpawnIn <= 0){
+            const hostile = Math.random() < 0.70;
+            if(hostile){
+              spawnTarget('hit', {life: rand(460, 780), r: rand(20, 34), innerR: 0.40});
+            } else {
+              spawnTarget('avoid', {life: rand(600, 980), r: rand(24, 40), innerR: 0.40});
+            }
+          }
+        } else {
+          // expire behavior: only hostile miss counts
+          if(performance.now() - target.born > target.life){
+            if(target.type === 'hit') l3Miss++;
+            clearTarget();
+            l3SpawnIn = rand(0.12, 0.32);
+          }
+        }
+      }
+      lvlScores[2] = scoreLevel3(l3OK, l3Bad, l3Miss, l3Head);
+      elLvlScore.textContent = String(lvlScores[2]);
+    }
+
+    setHUD();
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  // init
+  showMenu();
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
